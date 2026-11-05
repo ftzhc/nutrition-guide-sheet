@@ -1,0 +1,1445 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light">
+<title>栄養指導シート作成ツール｜福岡天神頭痛と肺のクリニック</title>
+<style>
+/* =========================================================
+   栄養指導シート作成ツール（スタッフ用）
+   - 1ファイルで動きます（外部ライブラリ・通信なし）
+   - 画面用のデザインと、印刷（A4縦）用のデザインを分けています
+   ========================================================= */
+
+:root {
+  --bg: #f2f5f2;          /* 画面の背景（落ち着いた薄い緑がかったグレー） */
+  --panel: #ffffff;       /* 入力欄・プレビューの背景 */
+  --ink: #1f2a26;         /* 文字色 */
+  --muted: #5a6963;       /* 補足の文字色 */
+  --line: #cfd8d3;        /* 枝線 */
+  --primary: #2f6b5c;     /* メインの色（深い緑） */
+  --primary-soft: #e4efea;/* メインの色のうすい版 */
+  --accent: #9c5a14;      /* 「相談」の印の色（落ち着いた茶色） */
+  --accent-soft: #fbf2e6;
+  --warn: #9b3a2f;        /* 腎臓の注意の色（落ち着いた赤） */
+  --warn-soft: #fbeae8;
+  --focus: #1f5fbf;
+  --sheet-ink: #111;
+}
+
+* { box-sizing: border-box; }
+
+html { font-size: 18px; }  /* 画面の基本の文字サイズ（大きめ） */
+
+body {
+  margin: 0;
+  font-family: "BIZ UDPGothic", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", "Meiryo", "Noto Sans JP", "Noto Sans CJK JP", sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  line-height: 1.6;
+}
+
+/* ---------- 画面の上部 ---------- */
+.app-header {
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  padding: 0.8rem 1.2rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.app-header h1 {
+  font-size: 1.25rem;
+  margin: 0;
+  color: var(--primary);
+}
+.app-header .sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.toolbar {
+  margin-left: auto;
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+button {
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 0.6rem 1.3rem;
+  border-radius: 10px;
+  border: 2px solid var(--primary);
+  background: var(--primary);
+  color: #fff;
+  cursor: pointer;
+  min-height: 3rem;
+}
+button.secondary {
+  background: #fff;
+  color: var(--primary);
+}
+button:hover { filter: brightness(1.08); }
+button:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ---------- 2列レイアウト（入力 ＋ プレビュー） ---------- */
+.app {
+  display: grid;
+  grid-template-columns: minmax(360px, 480px) minmax(0, 1fr);
+  gap: 1.2rem;
+  padding: 1.2rem;
+  max-width: 1500px;
+  margin: 0 auto;
+}
+@media (max-width: 1100px) {
+  .app { grid-template-columns: 1fr; }
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.form-panel { padding: 1rem 1.2rem 1.4rem; }
+.preview-panel {
+  padding: 1rem;
+  background: #e7ebe8;
+  overflow: auto;
+}
+@media (min-width: 1101px) {
+  .preview-panel {
+    position: sticky;
+    top: 5.2rem;
+    max-height: calc(100vh - 6.4rem);
+  }
+}
+.preview-label {
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* ---------- 入力欄 ---------- */
+fieldset {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem 0.9rem;
+  margin: 0 0 1rem;
+}
+legend {
+  font-weight: 700;
+  color: var(--primary);
+  padding: 0 0.3rem;
+}
+.choices { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.8rem;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  background: #fff;
+  min-height: 2.8rem;
+}
+.choice:has(input:checked) {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+.choice.wide { width: 100%; }
+.choice.warn:has(input:checked) {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+input[type="checkbox"], input[type="radio"] {
+  width: 1.4rem;
+  height: 1.4rem;
+  margin: 0;
+  accent-color: var(--primary);
+  flex: none;
+}
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem 1rem;
+}
+.field label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+.field .unit { color: var(--muted); font-size: 0.9rem; margin-left: 0.3rem; }
+input[type="number"] {
+  font: inherit;
+  font-size: 1.15rem;
+  width: 7rem;
+  max-width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+}
+textarea {
+  font: inherit;
+  width: 100%;
+  min-height: 6rem;
+  padding: 0.6rem 0.7rem;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  resize: vertical;
+}
+.hint {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0.4rem 0 0;
+}
+.field-warn {
+  color: var(--warn);
+  font-size: 0.85rem;
+  margin: 0.3rem 0 0;
+  min-height: 1.2em;
+}
+.privacy {
+  font-size: 0.85rem;
+  color: var(--muted);
+  border-top: 1px dashed var(--line);
+  padding-top: 0.6rem;
+  margin: 0.4rem 0 0;
+}
+
+/* ---------- 画面の下部 ---------- */
+.app-footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 1rem 1.2rem 2rem;
+}
+.app-footer .status {
+  display: inline-block;
+  padding: 0.1rem 0.6rem;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 6px;
+  margin: 0 0.2rem;
+}
+
+/* =========================================================
+   印刷される「シート」のデザイン（画面のプレビューも同じ見え方）
+   単位は印刷に合わせて pt / mm を使っています
+   ========================================================= */
+.sheet {
+  background: #fff;
+  color: var(--sheet-ink);
+  width: 210mm;              /* A4の幅 */
+  min-height: 297mm;         /* A4の高さ */
+  padding: 10mm 12mm;
+  margin: 0 auto;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.14);
+  font-size: 10.5pt;
+  line-height: 1.45;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.sheet-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 4mm;
+  border-bottom: 2.5px solid var(--primary);
+  padding-bottom: 1.2mm;
+  margin-bottom: 2mm;
+}
+.sheet-title {
+  font-size: 18pt;
+  margin: 0;
+  color: var(--primary);
+  letter-spacing: 0.04em;
+}
+.sheet-meta { text-align: right; font-size: 10.5pt; white-space: nowrap; }
+.sheet-meta .name { font-size: 11.5pt; margin-top: 0.5mm; }
+
+.sheet h3 {
+  font-size: 12pt;
+  margin: 2.4mm 0 1.1mm;
+  padding: 0.3mm 0 0.3mm 2.5mm;
+  border-left: 4px solid var(--primary);
+  color: var(--primary);
+}
+.sheet-dz {
+  margin: 0 0 2mm;
+  font-size: 11.5pt;
+}
+.sheet-dz .lbl {
+  display: inline-block;
+  border: 1.5px solid var(--primary);   /* 背景を印刷しない設定でも読めるよう枠線にしています */
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 10pt;
+  line-height: 1.4;
+  padding: 0 2mm;
+  border-radius: 1.5mm;
+  margin-right: 2mm;
+  vertical-align: middle;
+}
+.sheet-dz .kidney-tag { color: var(--warn); font-weight: 700; margin-left: 2mm; }
+.empty {
+  color: #555;
+  text-align: center;
+  padding: 10mm 0;
+  font-size: 11pt;
+}
+
+/* 1日の目安の表 */
+.targets table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10pt;
+}
+.targets th, .targets td {
+  border: 1px solid #b8bdb9;
+  padding: 0.8mm 2mm;
+  text-align: left;
+  vertical-align: top;
+}
+.targets th {
+  width: 37mm;
+  background: var(--primary-soft);
+  font-weight: 700;
+}
+.targets .val { font-weight: 700; }
+.targets .note {
+  font-size: 8.5pt;
+  color: #444;
+  font-weight: 400;
+  margin-left: 1mm;
+}
+.targets .miss { color: #666; font-weight: 400; }
+.sheet .h3-note { font-size: 8.5pt; font-weight: 400; color: #444; margin-left: 2mm; }
+
+/* 大事なポイント */
+.points ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: pt;
+}
+.points li {
+  position: relative;
+  padding-left: 9mm;
+  margin: 0 0 1.2mm;
+  counter-increment: pt;
+  line-height: 1.4;
+}
+.points li::before {
+  content: counter(pt);
+  position: absolute;
+  left: 0;
+  top: 0.5mm;
+  width: 6.3mm;
+  height: 6.3mm;
+  border-radius: 50%;
+  border: 1.5px solid var(--primary);   /* 背景を印刷しない設定でも番号が消えないよう枠線にしています */
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 10.5pt;
+  line-height: 6.3mm;
+  text-align: center;
+}
+.points .pt-title { font-weight: 700; font-size: 11pt; }
+.points .pt-body { font-size: 10pt; }
+
+/* 控えたい食品・とりたい食品 */
+.foods table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 10pt;
+}
+.foods th, .foods td {
+  border: 1px solid #b8bdb9;
+  padding: 0.6mm 2mm;
+  vertical-align: top;
+  line-height: 1.38;
+}
+.foods th { font-size: 10.5pt; padding: 1mm 2mm; }
+.foods th.avoid { background: #f3e9e7; color: #7a2e25; }
+.foods th.take { background: var(--primary-soft); color: var(--primary); }
+.foods td { text-indent: -1em; padding-left: calc(1em + 1.5mm); }
+.foods .bul { color: #666; }
+
+/* 相談の印 */
+.consult {
+  display: inline-block;
+  font-size: 8.5pt;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 1mm;
+  padding: 0 1.3mm;
+  margin-left: 1.2mm;
+  vertical-align: middle;
+  white-space: nowrap;
+  line-height: 1.5;
+  text-indent: 0;
+}
+
+/* 注意の箱 */
+.notice {
+  border: 1.5px solid #8a938e;
+  border-radius: 2mm;
+  padding: 1.2mm 2.5mm;
+  margin: 2mm 0 0;
+  font-size: 10pt;
+}
+.notice.kidney {
+  border: 2px solid var(--warn);
+  background: var(--warn-soft);
+  color: #4a1a14;
+  font-weight: 700;
+  font-size: 11.5pt;
+  margin: 0 0 1.5mm;
+}
+.notices .notice + .notice { margin-top: 1mm; }
+
+/* スタッフのひとこと */
+.staff {
+  border: 1px solid #8a938e;
+  border-radius: 2mm;
+  padding: 1.5mm 3mm;
+  min-height: 14mm;
+  white-space: pre-wrap;
+  font-size: 10.5pt;
+}
+.staff.blank {
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 7.5mm, #c9cfcb 7.5mm 7.6mm);
+}
+
+/* シートの下部 */
+.sheet-foot {
+  margin-top: 2.5mm;
+  padding-top: 1.5mm;
+  border-top: 1px solid #8a938e;
+  display: flex;
+  justify-content: space-between;
+  gap: 4mm;
+  font-size: 10pt;
+}
+.sheet-foot .clinic { font-weight: 700; white-space: nowrap; }
+.draft-mark {
+  font-size: 8.5pt;
+  color: #777;
+  margin-left: 2mm;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   印刷用（A4縦1枚に収めるための設定）
+   ========================================================= */
+@media print {
+  @page { size: A4 portrait; margin: 8mm 10mm; }   /* 上下左右の余白。変えたら SETTINGS.pageMarginTopBottomMm も合わせてください */
+  html { font-size: 11pt; }
+  body { background: #fff; }
+  .no-print { display: none !important; }
+  .app { display: block; padding: 0; max-width: none; }
+  .preview-panel {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+    border: 0;
+    background: #fff;
+    border-radius: 0;
+  }
+  .sheet {
+    width: auto;
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+    box-shadow: none;
+    zoom: var(--print-zoom, 1) !important;   /* 1枚に収まらないとき、少しだけ縮小（プログラムが計算） */
+  }
+  .points li, .foods tr, .notice, .targets tr { break-inside: avoid; }
+  .sheet h3 { break-after: avoid; }
+}
+</style>
+</head>
+<body>
+
+<header class="app-header no-print">
+  <div>
+    <h1>栄養指導シート作成ツール</h1>
+    <p class="sub">スタッフ用。病名と体格を入れると、右側に患者さんへお渡しする「あなたの食事のポイント」ができます。</p>
+  </div>
+  <div class="toolbar">
+    <button type="button" id="print-btn">印刷する</button>
+    <button type="button" id="clear-btn" class="secondary">入力をすべて消す</button>
+  </div>
+</header>
+
+<main class="app">
+  <section class="panel form-panel no-print" aria-labelledby="form-title">
+    <h2 id="form-title" style="font-size:1.1rem;margin:0 0 0.8rem;">入力</h2>
+    <noscript><p class="field-warn">このツールを使うには、ブラウザの JavaScript を有効にしてください。</p></noscript>
+    <form id="form" autocomplete="off">
+
+      <fieldset>
+        <legend>1. 病名（複数選べます）</legend>
+        <div class="choices" id="disease-choices"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>2. 腎臓</legend>
+        <div class="choices">
+          <label class="choice wide warn">
+            <input type="checkbox" name="kidney" id="kidney">
+            <span>腎臓の病気がある・透析中</span>
+          </label>
+        </div>
+        <p class="hint">チェックすると、たんぱく質・カリウム・水分の目安は出さず、「医師の指示に従ってください」と表示します。</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>3. 年齢・性別・身長・体重</legend>
+        <div class="grid2">
+          <div class="field">
+            <label for="age">年齢</label>
+            <input type="number" id="age" name="age" inputmode="numeric" min="0" max="120" step="1"><span class="unit">歳</span>
+          </div>
+          <div class="field">
+            <label>性別</label>
+            <div class="choices">
+              <label class="choice"><input type="radio" name="sex" value="male"><span>男性</span></label>
+              <label class="choice"><input type="radio" name="sex" value="female"><span>女性</span></label>
+            </div>
+          </div>
+          <div class="field">
+            <label for="height">身長</label>
+            <input type="number" id="height" name="height" inputmode="decimal" min="50" max="250" step="0.1"><span class="unit">cm</span>
+          </div>
+          <div class="field">
+            <label for="weight">体重</label>
+            <input type="number" id="weight" name="weight" inputmode="decimal" min="10" max="300" step="0.1"><span class="unit">kg</span>
+          </div>
+        </div>
+        <p class="field-warn" id="body-warn" aria-live="polite"></p>
+      </fieldset>
+
+      <fieldset>
+        <legend>4. 身体活動量</legend>
+        <div class="choices" id="activity-choices"></div>
+      </fieldset>
+
+      <fieldset id="menstruation-field" hidden>
+        <legend>5. 月経（鉄欠乏性貧血のとき）</legend>
+        <div class="choices">
+          <label class="choice wide">
+            <input type="checkbox" name="menstruation" id="menstruation">
+            <span>月経がある</span>
+          </label>
+        </div>
+        <p class="hint">鉄の推奨量が変わります。</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>6. スタッフのひとこと（印刷に載ります）</legend>
+        <textarea id="comment" name="comment" maxlength="400" placeholder="例：まず「汁物は1日1杯」から始めてみましょう。次回、体重と血圧の記録を見せてください。"></textarea>
+        <p class="hint">400文字まで。空欄のままだと、手書き用の線が印刷されます。</p>
+      </fieldset>
+
+      <p class="privacy">入力した内容は、この画面の中だけで使い、どこにも保存・送信しません。画面を閉じたり再読み込みすると消えます。患者さんのお名前は入力せず、印刷後に手書きしてください。</p>
+    </form>
+  </section>
+
+  <section class="panel preview-panel" aria-label="印刷されるシートのプレビュー">
+    <p class="preview-label no-print">印刷プレビュー（A4縦）。内容は入力に合わせて自動で変わります。</p>
+    <div class="sheet" id="sheet"></div>
+  </section>
+</main>
+
+<footer class="app-footer no-print">
+  <div>最終更新日：<span id="last-updated"></span>　／　<span class="status">医師・管理栄養士確認：<span id="review-status"></span></span></div>
+  <div>この画面の文章・数字はすべて下書きです。公開前に医師・管理栄養士が確認してください。数字は日本の主な診療ガイドラインと「日本人の食事摂取基準」を参考にした一般的な値です。</div>
+</footer>
+
+<script>
+'use strict';
+
+/* =====================================================================
+ * ここから「病名ごとのデータ」です。
+ * 画面に出る文章・数字・食品リストは、すべてこの DATA の中にまとめています。
+ * 医師・管理栄養士が確認して直すところは、ここだけです。
+ *
+ * ■ 項目の意味
+ *   key        … 項目の名前（半角英字）。同じ key は1つにまとめられるので、
+ *                病名が重なっても同じことを何度も書きません。
+ *   priority   … 大きいほど先（上）に出ます。ポイントは上位 maxPoints 個、
+ *                食品は各列 上位 maxFoods 個だけ印刷されます。
+ *   title/body … 大事なポイントの見出しと説明文
+ *   text       … 食品リストの1行
+ *   use        … 「共通のポイント（shared）」を使うときに書く名前。
+ *                extra を書くと、その病名ならではの一言を最後に足せます。
+ *   kidneyHide … true なら「腎臓の病気がある・透析中」にチェックがあるとき出しません
+ *   kidneyBody / kidneyText / kidneyValue … 腎臓にチェックがあるとき、代わりに出す文章
+ *   consult    … true なら「医師・管理栄養士に相談」の印をつけます
+ *   strictness … 「1日の目安」で同じ key が重なったとき、数字が小さいほうを採用します（厳しいほう）
+ *   {value}    … 共通ポイントの文章の中で、1日の目安の値（例：1日 6g未満）に置きかわります
+ * ===================================================================== */
+const DATA = {
+  clinicName: '福岡天神頭痛と肺のクリニック',
+  sheetTitle: 'あなたの食事のポイント',
+  lastUpdated: '2026-11-05',   // 最終更新日（直したら書きかえてください）
+  reviewStatus: '未',          // 医師・管理栄養士の確認：「未」→ 確認がすんだら「済」に
+  maxPoints: 5,                // 大事なポイントの最大数
+  maxFoods: 8,                 // 控えたい食品・とりたい食品の各列の最大数
+  footerMessage: 'わからないことは、次の受診のときにおたずねください。',
+
+  /* ---- 身体活動量とエネルギー係数（kcal／目標体重1kgあたり）---- 糖尿病治療ガイド */
+  activity: [
+    { id: 'low',  label: 'ほとんど座っている',                 short: '座っていることが多い', min: 25, max: 30 },
+    { id: 'mid',  label: '座る仕事が中心だが、通勤や家事で動く', short: 'ふつう',             min: 30, max: 35 },
+    { id: 'high', label: '立ち仕事や力仕事が多い',             short: 'よく動く',           min: 35, max: null }, // 上限なし（35kcal以上）
+  ],
+
+  /* ---- 目標体重：身長(m)² × 係数 ---- 糖尿病治療ガイド */
+  targetWeight: {
+    ageCut: 65,          // この年齢以上は幅（22〜25）で出す
+    young: [22, 22],     // 65歳未満
+    old:   [22, 25],     // 65歳以上
+  },
+
+  /* ---- BMI の区分 ---- 日本肥満学会 */
+  bmiClasses: [
+    { below: 18.5,     label: '低体重（やせ）', kind: 'low' },
+    { below: 25,       label: '普通体重',       kind: 'normal' },
+    { below: 30,       label: '肥満（1度）',    kind: 'high' },
+    { below: 35,       label: '肥満（2度）',    kind: 'high' },
+    { below: 40,       label: '肥満（3度）',    kind: 'high' },
+    { below: Infinity, label: '肥満（4度）',    kind: 'high' },
+  ],
+
+  /* ---- 腎臓の病気・透析にチェックがあるときの表示 ---- */
+  kidney: {
+    label: '腎臓の病気がある・透析中',
+    tag: '腎臓の病気・透析あり',
+    notice: '腎臓の病気があるため、たんぱく質・カリウム・水分の量は医師の指示に従ってください。',
+  },
+
+  /* ---- 複数の病名で共通するポイント（1つにまとめて出すための文章）---- */
+  shared: {
+    salt: {
+      title: '食塩は{value}に',
+      body: '汁物は1日1杯まで。めんのスープは残す。しょうゆやソースは「かける」より「つける」。だし・酸味（酢・レモン）・香辛料を使うと、うす味でもおいしく食べられます。',
+    },
+    alcohol: {
+      title: 'お酒は控えめに',
+      body: '1日の目安はビール中びん1本（500mL）か日本酒1合くらいまで。女性はその半分くらい。週に2日はお酒を飲まない日をつくりましょう。',
+      bodyMale: '1日の目安はビール中びん1本（500mL）か日本酒1合くらいまで。週に2日はお酒を飲まない日をつくりましょう。',      // 男性のとき
+      bodyFemale: '1日の目安はビール中びん半分（250mL）か日本酒半合くらいまで。週に2日はお酒を飲まない日をつくりましょう。',   // 女性のとき
+    },
+    sweets: {
+      title: '甘い飲み物・お菓子を控えましょう',
+      body: 'ジュース・清涼飲料・加糖のコーヒーや紅茶・スポーツドリンクは、血糖や尿酸を上げやすいので控えます。のどがかわいたら水やお茶を。お菓子は量と回数を決めて。',
+    },
+    fiber: {
+      title: '食物繊維をしっかり（{value}）',
+      body: '野菜・海藻・きのこ・豆・玄米や麦ごはんなどに多く含まれます。血糖やコレステロールの上がりすぎをおさえ、おなかの調子も整えます。',
+      kidneyBody: '豆・玄米や麦ごはん・海藻・きのこなどに多く含まれます。腎臓の病気があるときは、野菜・果物のとり方（カリウム）を医師・管理栄養士に相談してください。',
+    },
+    // 体重のポイントは、BMI によって文章が変わります
+    weight: {
+      title: '適正な体重に近づけましょう',
+      body: '体重が適正に近づくと、血圧・血糖・コレステロール・尿酸の値がよくなりやすくなります。',
+      titleHigh: '体重を少し減らしましょう',   // BMI 25以上
+      bodyHigh: '体重が減ると、血圧・血糖・コレステロール・尿酸の値がよくなりやすくなります。まず今の体重の3〜5%（約{kg}）を目標に、1か月に1〜2kgのペースでゆっくり減らしましょう。',
+      titleNormal: '今の体重を保ちましょう',   // BMI 18.5〜25
+      bodyNormal: '今の体重は適正の範囲です。体重が増えないように、今の食事の量を保ちましょう。',
+      titleLow: 'やせすぎに注意し、体重を保ちましょう',  // BMI 18.5未満
+      bodyLow: '体重が減ると体力や抵抗力が落ちます。3食しっかり食べて、体重が減らないようにしましょう。',
+    },
+  },
+
+  /* ---- 病名ごとの内容 ---- */
+  diseases: {
+
+    /* ================= 高血圧症 ================= 高血圧治療ガイドライン2019 */
+    htn: {
+      name: '高血圧症',
+      targets: [
+        { key: 'salt', label: '食塩', value: '1日 6g未満', note: 'しょうゆ小さじ1杯で約1g、みそ汁1杯で約1.5g', strictness: 1 },
+        { key: 'alcohol', label: 'お酒', value: '1日 ビール中びん1本か日本酒1合まで（女性はその半分）', strictness: 2 },
+      ],
+      points: [
+        { use: 'salt', priority: 100 },
+        { key: 'htn_veg', priority: 70, kidneyHide: true,
+          title: '野菜・果物をとりましょう',
+          body: '野菜は毎食、果物は1日1回を目安に。野菜・果物に多いカリウムが、体の中の余分な塩分を出すのを助けます。' },
+        { use: 'weight', priority: 60 },
+        { use: 'alcohol', priority: 55 },
+      ],
+      avoid: [
+        { key: 'salty_pickles', priority: 90, text: '漬物・梅干し・佃煮・塩辛' },
+        { key: 'instant', priority: 85, text: 'カップめん・ラーメンのスープ、インスタント食品' },
+        { key: 'processed_meat', priority: 80, text: 'ハム・ソーセージ・かまぼこなどの加工品' },
+        { key: 'salty_snacks', priority: 60, text: 'せんべい・スナック菓子など塩味のお菓子' },
+      ],
+      take: [
+        { key: 'vegetables', priority: 90, kidneyHide: true, text: '野菜（1日350gが目安。毎食、両手1杯分）' },
+        { key: 'fish', priority: 70, text: '魚（特にさば・いわしなどの青魚）' },
+        { key: 'flavor', priority: 65, text: 'だし・酢・レモン・香辛料（塩の代わりに）' },
+        { key: 'fruit', priority: 60, kidneyHide: true, text: '果物（1日1回、適量）' },
+        { key: 'soy', priority: 58, text: '豆腐・納豆などの大豆製品' },
+      ],
+    },
+
+    /* ================= 脂質異常症 ================= 動脈硬化性疾患予防ガイドライン2022 */
+    dl: {
+      name: '脂質異常症',
+      targets: [
+        { key: 'cholesterol', label: 'コレステロール', value: '1日 200mg未満（LDLコレステロールが高い場合）', note: '卵1個で約185mg', strictness: 1 },
+        { key: 'fiber', label: '食物繊維', value: '1日 25g以上', strictness: 1 },
+        { key: 'salt', label: '食塩', value: '1日 6g未満', note: 'しょうゆ小さじ1杯で約1g、みそ汁1杯で約1.5g', strictness: 1 },
+        { key: 'alcohol', label: 'お酒', value: '1日 ビール中びん1本か日本酒1合まで（アルコール25g以下）', strictness: 3 },
+      ],
+      points: [
+        { key: 'dl_energy', priority: 90,
+          title: '食べすぎに注意し、エネルギー量を目安の範囲に',
+          body: '上の「1日のエネルギー量」を目安に。主食は毎食こぶし1つ分くらい、揚げ物や菓子は回数を決めましょう。' },
+        { key: 'dl_satfat', priority: 85,
+          title: '脂の多い肉・バター・生クリームを控え、魚・大豆製品を',
+          body: '肉は脂の少ない部位（もも・ヒレ、鶏むね皮なし）を選び、週に3回以上は魚を主菜に。飽和脂肪酸（動物性の脂）を減らすとLDLコレステロールが下がります。' },
+        { use: 'fiber', priority: 70 },
+        { use: 'weight', priority: 55 },
+        { key: 'dl_japanese', priority: 50,
+          title: '日本食を中心に',
+          body: 'ごはんに、魚・大豆製品・野菜・海藻・きのこ・果物を組み合わせた食事（うす味で）が、コレステロールを下げるのに役立ちます。' },
+        { key: 'dl_trans', priority: 45,
+          title: 'トランス脂肪酸を控える',
+          body: 'マーガリン・ショートニングを使った菓子パン・洋菓子・スナック菓子、ファストフードは控えめに。' },
+        { use: 'alcohol', priority: 40 },
+      ],
+      avoid: [
+        { key: 'fatty_meat', priority: 90, text: '脂の多い肉（バラ肉・ひき肉・ベーコン・鶏皮）' },
+        { key: 'butter_cream', priority: 85, text: 'バター・生クリーム・ラード' },
+        { key: 'dl_liver_roe', priority: 75, text: 'レバー・魚卵・うに（コレステロールが多い）' },
+        { key: 'dl_egg', priority: 70, text: '卵のとりすぎ（1日1個までを目安に）' },
+        { key: 'pastry', priority: 65, text: '菓子パン・洋菓子・スナック菓子' },
+        { key: 'sweet_drinks', priority: 60, text: '甘い飲み物（ジュース・清涼飲料・加糖コーヒー）' },
+      ],
+      take: [
+        { key: 'fish', priority: 95, text: '魚（特にさば・いわし・さんまなどの青魚）' },
+        { key: 'soy', priority: 90, text: '豆腐・納豆・豆乳などの大豆製品' },
+        { key: 'vegetables', priority: 85, kidneyHide: true, text: '野菜・海藻・きのこ（毎食、両手1杯分）' },
+        { key: 'whole_grain', priority: 70, text: '玄米・麦ごはん・全粒粉パン' },
+        { key: 'fruit', priority: 50, kidneyHide: true, text: '果物は適量（1日 みかん2個かりんご半分くらい）' },
+        { key: 'veg_oil', priority: 45, text: '油は植物油（オリーブ油・なたね油など）を少量' },
+      ],
+    },
+
+    /* ================= 2型糖尿病 ================= 糖尿病診療ガイドライン2024・糖尿病治療ガイド */
+    dm: {
+      name: '2型糖尿病',
+      targets: [
+        { key: 'fiber', label: '食物繊維', value: '1日 20g以上', strictness: 2 },
+        { key: 'salt', label: '食塩', value: '1日 男性7.5g未満・女性6.5g未満', note: '血圧が高い場合は6g未満', strictness: 2 },
+      ],
+      points: [
+        { key: 'dm_balance', priority: 95,
+          title: 'エネルギー量を目安に、主食・主菜・副菜をそろえる',
+          body: '上の「1日のエネルギー量」を目安に。毎食、主食（ごはん・パン・めん）、主菜（肉・魚・卵・大豆製品）、副菜（野菜・海藻・きのこ）をそろえると、バランスが整います。' },
+        { key: 'dm_regular', priority: 85,
+          title: '1日3食を規則正しく',
+          body: '食事を抜いたり、まとめて食べたりすると血糖が上がりやすくなります。なるべく決まった時間に、よくかんでゆっくり食べましょう。' },
+        { key: 'dm_veg_first', priority: 80,
+          title: '野菜から先に食べる',
+          body: '食事のはじめに野菜・海藻・きのこを食べると、食後の血糖の上がり方がゆるやかになります。' },
+        { use: 'sweets', priority: 75 },
+        { use: 'fiber', priority: 65 },
+        { use: 'weight', priority: 50 },
+      ],
+      avoid: [
+        { key: 'sweet_drinks', priority: 95, text: '甘い飲み物（ジュース・清涼飲料・加糖コーヒー）' },
+        { key: 'sweets', priority: 90, text: 'お菓子・菓子パン・アイス（量と回数を決めて）' },
+        { key: 'large_portion', priority: 70, text: 'ごはん・めんの大盛り・おかわり' },
+        { key: 'fried', priority: 60, text: '揚げ物のとりすぎ' },
+        { key: 'fruit_excess', priority: 50, text: '果物のとりすぎ（1日1回、片手にのる量まで）' },
+      ],
+      take: [
+        { key: 'vegetables', priority: 95, kidneyHide: true, text: '野菜・海藻・きのこ（毎食、両手1杯分を目安に）' },
+        { key: 'protein_main', priority: 80, text: '魚・大豆製品・卵・鶏肉などの主菜を毎食1品' },
+        { key: 'whole_grain', priority: 70, text: '玄米・麦ごはん・全粒粉パン（血糖が上がりにくい）' },
+        { key: 'dairy_plain', priority: 55, text: '牛乳・無糖ヨーグルト（1日1〜2回）' },
+      ],
+    },
+
+    /* ================= 高尿酸血症 ================= 高尿酸血症・痛風の治療ガイドライン 第3版（2019） */
+    gout: {
+      name: '高尿酸血症',
+      targets: [
+        { key: 'purine', label: 'プリン体', value: '1日 400mg程度まで', note: '鶏レバー100gで約300mg', strictness: 1 },
+        { key: 'water', label: '水分', value: '尿が1日2Lくらい出るように、水やお茶（無糖）をこまめに',
+          kidneyValue: '水分の量は医師の指示に従ってください（腎臓の病気のため）', strictness: 1 },
+        { key: 'alcohol', label: 'お酒', value: '1日 日本酒1合・ビール500mL・ウイスキー60mLのどれか1つまで', note: 'ビールは特に控えめに', strictness: 1 },
+      ],
+      points: [
+        { key: 'gout_purine', priority: 95,
+          title: 'プリン体の多い食品を控える（1日400mg程度まで）',
+          body: 'レバー・白子・あん肝、干物、煮干し、魚卵（たらこ・いくら）、肉や魚のうま味の濃いスープは、プリン体が多いので控えめに。' },
+        { key: 'gout_water', priority: 85, kidneyHide: true,
+          title: '水分を十分に',
+          body: '尿が1日2Lくらい出るように、水やお茶（無糖）をこまめに飲みましょう。甘い飲み物やお酒は水分のかわりになりません。' },
+        { use: 'alcohol', priority: 80, extra: 'ビール・発泡酒はプリン体が多いので、特に控えましょう。' },
+        { use: 'sweets', priority: 60, extra: '果糖（果物の糖）の多い飲み物は、尿酸を上げます。' },
+        { use: 'weight', priority: 55 },
+      ],
+      notices: [
+        { key: 'gout_fluid', kidneyHide: true,
+          text: '心臓や腎臓の病気で水分の制限を受けている方は、水分の量を医師に相談してください。' },
+      ],
+      avoid: [
+        { key: 'liver_milt', priority: 95, text: 'レバー・白子・あん肝' },
+        { key: 'dried_fish', priority: 90, text: '干物（いわし・あじ・さんま）・煮干し' },
+        { key: 'beer', priority: 88, text: 'ビール・発泡酒、お酒の飲みすぎ' },
+        { key: 'roe', priority: 85, text: '魚卵（たらこ・いくら・明太子）' },
+        { key: 'sweet_drinks', priority: 70, text: '果糖の多い甘い飲み物（ジュース・清涼飲料）' },
+        { key: 'rich_soup', priority: 55, text: '肉・魚の濃いだしのスープ、鍋の残り汁' },
+      ],
+      take: [
+        { key: 'water', priority: 95, kidneyHide: true, text: '水・お茶（無糖）をこまめに' },
+        { key: 'dairy_plain', priority: 85, kidneyHide: true, text: '牛乳・ヨーグルト（乳製品は尿酸を下げやすい）' },
+        { key: 'vegetables', priority: 80, kidneyHide: true, text: '野菜・海藻・きのこ・いも（尿酸を出しやすくする）' },
+        { key: 'low_purine_protein', priority: 70, text: '卵・豆腐・乳製品など、プリン体の少ないたんぱく質' },
+      ],
+    },
+
+    /* ================= 鉄欠乏性貧血 ================= 日本人の食事摂取基準（鉄の推奨量） */
+    ida: {
+      name: '鉄欠乏性貧血',
+      // 鉄の推奨量（成人）。性別と月経の有無で表示が変わります
+      iron: {
+        male: '1日 7.0〜7.5mg',
+        femaleMenstruating: '1日 10.0〜10.5mg',
+        femaleNot: '1日 6.0〜6.5mg',
+        noteMale: '成人男性の推奨量',
+        noteFemaleMenstruating: '月経のある成人女性の推奨量',
+        noteFemaleNot: '月経のない成人女性の推奨量',
+        unknown: '成人男性 7.0〜7.5mg／月経のある女性 10.0〜10.5mg／月経のない女性 6.0〜6.5mg',
+        noteUnknown: '性別を選ぶと、あてはまる値だけを表示します',
+      },
+      targets: [],  // 鉄の行はプログラムが上の iron から作ります
+      points: [
+        { key: 'ida_iron_foods', priority: 95,
+          title: '鉄の多い食品を毎日とる',
+          body: '赤身の肉（牛もも・ヒレ）、赤身の魚（かつお・まぐろ）、あさり・しじみ、小松菜・ほうれん草、納豆・豆腐などの大豆製品、卵。',
+          kidneyBody: '赤身の肉・魚、あさり、大豆製品、卵など。量は医師の指示に従ってください。' },
+        { key: 'ida_heme', priority: 85,
+          title: '肉・魚の鉄は吸収がよい。野菜・大豆の鉄はビタミンCと一緒に',
+          body: '肉・魚の「ヘム鉄」は体に吸収されやすく、野菜・大豆・海藻の「非ヘム鉄」は、ビタミンC（野菜・果物・いも）や肉・魚と一緒にとると吸収が高まります。' },
+        { key: 'ida_tea', priority: 75,
+          title: '食事中・食後すぐのお茶・コーヒーは控えめに',
+          body: '濃いお茶・コーヒー・紅茶のタンニンは鉄の吸収をさまたげます。飲むなら食事と時間をずらすか、麦茶や水に。' },
+        { key: 'ida_regular', priority: 60,
+          title: '3食きちんと、たんぱく質を毎食',
+          body: '欠食や極端なダイエットは鉄不足のもと。毎食、肉・魚・卵・大豆製品のどれかをとりましょう。' },
+      ],
+      notices: [
+        { key: 'ida_supplement', text: '鉄剤が出ている場合は、食事は補助です。鉄剤は医師の指示どおりに続けてください。' },
+      ],
+      avoid: [
+        { key: 'tea_with_meal', priority: 90, text: '食事中・食後すぐの濃いお茶・コーヒー・紅茶' },
+        { key: 'skipping_meals', priority: 80, text: '欠食・極端なダイエット' },
+        { key: 'instant', priority: 50, text: 'インスタント食品や菓子パンだけの食事' },
+      ],
+      take: [
+        { key: 'ida_red_meat', priority: 95, text: '赤身の肉（牛もも・ヒレ、豚ヒレ）' },
+        { key: 'ida_liver', priority: 90, text: 'レバー（鉄がとても多い。週1回くらい）' },
+        { key: 'ida_red_fish', priority: 88, text: '赤身の魚（かつお・まぐろ・いわし）' },
+        { key: 'ida_clam', priority: 85, text: 'あさり・しじみ（缶詰やみそ汁でも）' },
+        { key: 'ida_greens', priority: 80, kidneyHide: true, text: '小松菜・ほうれん草・枝豆' },
+        { key: 'soy', priority: 75, text: '納豆・豆腐・高野豆腐などの大豆製品' },
+        { key: 'ida_vitc', priority: 70, kidneyHide: true, text: 'ビタミンCの多い野菜・果物（ブロッコリー・いちご）' },
+        { key: 'ida_egg', priority: 60, text: '卵' },
+      ],
+    },
+
+    /* ================= 低アルブミン血症 ================= 低栄養の一般的な目安（要確認） */
+    hypoalb: {
+      name: '低アルブミン血症',
+      // 今の体重1kgあたりの目安。energyPerKg は「しっかり食べる」ときのエネルギー、proteinPerKg はたんぱく質
+      calc: { energyPerKg: [30, 35], proteinPerKg: [1.0, 1.2] },
+      targets: [],  // エネルギー・たんぱく質の行はプログラムが上の calc から作ります
+      points: [
+        { key: 'hypoalb_energy_protein', priority: 95,
+          title: 'エネルギーとたんぱく質をしっかりとる',
+          body: '毎食、肉・魚・卵・大豆製品・乳製品のどれかを主菜に。ごはん・パン・めんも抜かずに食べて、体重が減らないようにしましょう。',
+          kidneyBody: 'エネルギーは十分にとり、体重が減らないようにしましょう。たんぱく質の種類と量は医師の指示に従ってください。' },
+        { key: 'hypoalb_small_frequent', priority: 85,
+          title: '1回に食べられる量が少ないときは、回数を増やす',
+          body: '3食にこだわらず、1日5〜6回に分けて少しずつ。食事の前に水分をたくさんとるとおなかがふくれるので、飲み物は食後に。' },
+        { key: 'hypoalb_snacks', priority: 80,
+          title: '間食に乳製品や卵を使う',
+          body: 'ヨーグルト・チーズ・牛乳・ゆで卵・茶わん蒸し・プリンなど、たんぱく質のとれる間食を1日1〜2回。' },
+      ],
+      notices: [
+        { key: 'hypoalb_cause', text: '低アルブミン血症は原因の確認が大切です。医師の説明に従ってください。' },
+      ],
+      avoid: [
+        { key: 'skipping_meals', priority: 90, text: '食事を抜くこと（欠食）' },
+        { key: 'veg_only', priority: 80, text: '野菜や汁物だけで終わる食事、おかずの少ない食事' },
+        { key: 'self_restriction', priority: 70, text: '自分の判断での食事制限（糖質制限など）' },
+      ],
+      take: [
+        { key: 'hypoalb_meat_fish', priority: 95, text: '肉・魚（毎食、手のひら1枚分くらい）', kidneyText: '肉・魚（量は医師の指示に従って）' },
+        { key: 'hypoalb_egg', priority: 90, text: '卵（1日1〜2個）', kidneyText: '卵' },
+        { key: 'hypoalb_dairy', priority: 88, text: '牛乳・ヨーグルト・チーズ' },
+        { key: 'soy', priority: 80, text: '豆腐・納豆・豆乳などの大豆製品' },
+        { key: 'hypoalb_energy_add', priority: 70, text: 'ごはん・いも・油を使った料理でエネルギーを足す' },
+      ],
+    },
+  },
+
+  /* ---- 病名が重なったときの特別ルール ----
+   *   all … ここに書いた病名が全部選ばれているとき
+   *   any … ここに書いた病名のどれか1つ以上が選ばれているとき（all と組み合わせ可）
+   *   removePoints / removeAvoid / removeTake … 取り下げる項目の key
+   *   addPoints / addAvoid / addTake … 代わりに足す項目（consult: true で「相談」の印）
+   *   energyConflict … true なら「1日の目安」のエネルギーに「相談」の印をつけ、両方の数字を並べます
+   */
+  combos: [
+    {
+      id: 'gout_hypoalb',
+      all: ['gout', 'hypoalb'],
+      removeTake: ['hypoalb_meat_fish', 'low_purine_protein', 'hypoalb_egg', 'hypoalb_dairy', 'soy', 'dairy_plain'],
+      addTake: [
+        { key: 'combo_lowpurine_protein', priority: 96, consult: true,
+          text: '卵・乳製品・大豆製品を中心に（プリン体が少ない）。肉・魚は適量',
+          kidneyText: '卵・乳製品・大豆製品を中心に（プリン体が少ない）。量は医師の指示で' },
+      ],
+      addPoints: [
+        { key: 'combo_gout_hypoalb', priority: 90, consult: true,
+          title: 'たんぱく質は、プリン体の少ない卵・乳製品・大豆製品を中心に',
+          body: '低アルブミン血症ではたんぱく質をしっかりとることが大切ですが、高尿酸血症ではプリン体の多い食品を控えます。卵・乳製品・大豆製品を中心にし、肉・魚は適量に。くわしい量は医師・管理栄養士に相談してください。',
+          kidneyBody: 'たんぱく質の種類は、プリン体の少ない卵・乳製品・大豆製品を中心に。量は医師の指示に従ってください。' },
+      ],
+    },
+    {
+      id: 'dl_ida',
+      all: ['dl', 'ida'],
+      removeTake: ['ida_liver'],
+      addPoints: [
+        { key: 'combo_liver', priority: 88, consult: true,
+          title: 'レバーは控え、赤身の肉・あさり・大豆製品で鉄をとる',
+          body: 'レバーは鉄が多い一方、コレステロールとプリン体も多い食品です。赤身の肉・赤身の魚・あさり・小松菜・大豆製品を中心に鉄をとりましょう。',
+          kidneyBody: 'レバーは鉄が多い一方、コレステロールとプリン体も多い食品です。赤身の肉・魚、あさり、大豆製品を中心に。量は医師の指示に従ってください。' },
+      ],
+    },
+    {
+      id: 'gout_ida',
+      all: ['gout', 'ida'],
+      removeTake: ['ida_liver', 'ida_red_fish'],
+      addPoints: [
+        { key: 'combo_liver', priority: 88, consult: true,
+          title: 'レバー・干物は控え、赤身の肉・あさり・大豆製品で鉄をとる',
+          body: 'レバー・かつお・干物は鉄が多い一方、プリン体も多い食品です。赤身の肉（適量）・あさり・小松菜・大豆製品・卵を中心に鉄をとりましょう。',
+          kidneyBody: 'レバー・かつお・干物は鉄が多い一方、プリン体も多い食品です。赤身の肉・あさり・大豆製品・卵を中心に。量は医師の指示に従ってください。' },
+      ],
+    },
+    {
+      id: 'energy_conflict',
+      any: ['dm', 'dl'],
+      all: ['hypoalb'],
+      energyConflict: true,
+      removeTake: ['hypoalb_energy_add'],
+      addPoints: [
+        { key: 'combo_energy', priority: 99, consult: true,
+          title: 'エネルギーの量は、医師と相談して決めましょう',
+          body: '糖尿病・脂質異常症では食べすぎをおさえ、低アルブミン血症ではしっかり食べることが大切です。考え方がぶつかるため、「1日の目安」に両方の数字を出しています。どちらを優先するかは医師と相談してください。' },
+      ],
+    },
+    {
+      id: 'dl_hypoalb_egg',
+      all: ['dl', 'hypoalb'],
+      removeAvoid: ['dl_egg'],
+      removeTake: ['hypoalb_egg'],
+      addTake: [
+        { key: 'combo_egg', priority: 89, consult: true, text: '卵は1日1個を目安に（魚・鶏肉・大豆製品も使う）' },
+      ],
+    },
+    {
+      id: 'dm_hypoalb_snack',
+      all: ['dm', 'hypoalb'],
+      removePoints: ['hypoalb_snacks'],
+      addPoints: [
+        { key: 'combo_snack', priority: 80, consult: true,
+          title: '間食は、甘くないたんぱく質のものを',
+          body: '無糖ヨーグルト・チーズ・牛乳・ゆで卵・茶わん蒸しなど。甘いお菓子やジュースは血糖を上げるので、間食に使うかどうかは医師・管理栄養士に相談してください。' },
+      ],
+    },
+  ],
+
+  /* ---- 「相談」の印の説明（印刷に載る） ---- */
+  consultLegend: '「相談」の印がついた項目は、病気が重なるため医師・管理栄養士にご相談ください。',
+  estimateNote: '数字はすべて目安です。体調や治療の内容によって変わります。',
+};
+/* ===== データはここまで ===== */
+
+
+/* =====================================================================
+ * ここから下はプログラムです（ふつうは直す必要がありません）
+ * ===================================================================== */
+(function () {
+  const form = document.getElementById('form');
+  const sheet = document.getElementById('sheet');
+  const SHEET_WIDTH_PX = 210 * 96 / 25.4;   // 210mm を画面のピクセルに
+
+  /* 印刷の設定：内容が A4 1枚に少しだけ入りきらないとき、最大でここまで縮小して1枚に収めます */
+  const SETTINGS = {
+    pageHeightMm: 297,            // A4 縦の高さ
+    pageMarginTopBottomMm: 16,    // @page の上下余白の合計（8mm + 8mm）
+    minPrintZoom: 0.9,            // これより小さくなるなら縮小せず、2枚に分けます
+  };
+
+  /* ---- 便利な関数 ---- */
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const roundTo = (n, step) => Math.round(n / step) * step;
+  const fmt = (n) => Number(n).toLocaleString('ja-JP');
+  const fix1 = (n) => (Math.round(n * 10) / 10).toFixed(1);
+  const num = (v, min, max) => {
+    const n = parseFloat(v);
+    if (!isFinite(n) || n < min || n > max) return null;
+    return n;
+  };
+  function todayJa() {
+    const d = new Date();
+    return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+  }
+  function dateJa(iso) {
+    const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(iso || '');
+    return m ? (Number(m[1]) + '年' + Number(m[2]) + '月' + Number(m[3]) + '日') : (iso || '');
+  }
+  const consultMark = () => '<span class="consult">相談</span>';
+
+  /* ---- 入力欄をデータから作る ---- */
+  function buildChoices() {
+    const dz = document.getElementById('disease-choices');
+    dz.innerHTML = Object.keys(DATA.diseases).map((k) =>
+      '<label class="choice"><input type="checkbox" name="disease" value="' + k + '"><span>' + esc(DATA.diseases[k].name) + '</span></label>'
+    ).join('');
+    const act = document.getElementById('activity-choices');
+    act.innerHTML = DATA.activity.map((a) =>
+      '<label class="choice wide"><input type="radio" name="activity" value="' + a.id + '"><span>' + esc(a.label) + '</span></label>'
+    ).join('');
+  }
+
+  /* ---- 入力を読む ---- */
+  function readForm() {
+    const fd = new FormData(form);
+    const selected = Object.keys(DATA.diseases).filter((k) => fd.getAll('disease').includes(k));
+    return {
+      selected,
+      kidney: fd.get('kidney') === 'on',
+      age: num(fd.get('age'), 0, 120),
+      sex: fd.get('sex') || null,                       // 'male' | 'female' | null
+      height: num(fd.get('height'), 50, 250),           // cm
+      weight: num(fd.get('weight'), 10, 300),           // kg
+      activity: fd.get('activity') || null,
+      menstruation: fd.get('menstruation') === 'on',
+      comment: (fd.get('comment') || '').trim(),
+      raw: { age: fd.get('age'), height: fd.get('height'), weight: fd.get('weight') },
+    };
+  }
+
+  /* ---- 計算（BMI・目標体重・エネルギー・たんぱく質）---- */
+  function calc(input) {
+    const c = { bmi: null, bmiClass: null, tw: null, energy: null, hypoalbEnergy: null, protein: null };
+    const hm = input.height ? input.height / 100 : null;
+
+    if (hm && input.weight) {
+      c.bmi = input.weight / (hm * hm);
+      c.bmiClass = DATA.bmiClasses.find((b) => c.bmi < b.below) || DATA.bmiClasses[DATA.bmiClasses.length - 1];
+    }
+    if (hm && input.age !== null) {
+      const f = input.age >= DATA.targetWeight.ageCut ? DATA.targetWeight.old : DATA.targetWeight.young;
+      c.tw = { low: hm * hm * f[0], high: hm * hm * f[1], factors: f, isRange: f[0] !== f[1] };
+    }
+    const act = DATA.activity.find((a) => a.id === input.activity);
+    if (c.tw && act) {
+      c.energy = {
+        low: roundTo(c.tw.low * act.min, 50),
+        high: act.max ? roundTo(c.tw.high * act.max, 50) : null,
+        act,
+      };
+    }
+    const ha = DATA.diseases.hypoalb;
+    if (input.selected.includes('hypoalb') && input.weight) {
+      const e = ha.calc.energyPerKg, p = ha.calc.proteinPerKg;
+      c.hypoalbEnergy = { low: roundTo(input.weight * e[0], 50), high: roundTo(input.weight * e[1], 50), perKg: e };
+      c.protein = { low: roundTo(input.weight * p[0], 5), high: roundTo(input.weight * p[1], 5), perKg: p };
+    }
+    return c;
+  }
+
+  /* ---- 同じ key の項目を1つにまとめる ---- */
+  function mergeByKey(items) {
+    const map = new Map();
+    items.forEach((it, i) => {
+      const prev = map.get(it.key);
+      if (!prev) {
+        map.set(it.key, Object.assign({ seq: i, diseases: new Set(it.diseases || []), extras: [] }, it,
+          { extras: it.extra ? [it.extra] : [], diseases: new Set(it.diseases || []) }));
+        return;
+      }
+      // 優先度が高いほうの文章を使い、病名と一言（extra）は合わせる
+      const winner = it.priority > prev.priority ? it : prev;
+      const merged = Object.assign({}, prev, winner, {
+        seq: prev.seq,
+        priority: Math.max(prev.priority, it.priority),
+        consult: !!(prev.consult || it.consult),
+        extras: prev.extras.concat(it.extra ? [it.extra] : []),
+        diseases: new Set([...prev.diseases, ...(it.diseases || [])]),
+      });
+      map.set(it.key, merged);
+    });
+    return [...map.values()];
+  }
+
+  /* ---- 腎臓にチェックがあるときの処理（出さない／文章を置きかえる）---- */
+  function applyKidney(items, kidney) {
+    if (!kidney) return items;
+    return items.filter((it) => !it.kidneyHide).map((it) => {
+      const o = Object.assign({}, it);
+      if (it.kidneyBody) o.body = it.kidneyBody;
+      if (it.kidneyText) o.text = it.kidneyText;
+      if (it.kidneyValue) o.value = it.kidneyValue;
+      return o;
+    });
+  }
+
+  const byPriority = (a, b) => (b.priority - a.priority) || (a.seq - b.seq);
+
+  /* ---- 大事なポイントを選ぶ（各病名から少なくとも1つ、残りは優先順）---- */
+  function pickPoints(points, selected, max) {
+    const sorted = [...points].sort(byPriority);
+    const chosen = [];
+    selected.forEach((d) => {
+      if (chosen.length >= max) return;
+      const first = sorted.find((p) => p.diseases.has(d) && !chosen.includes(p));
+      if (first) chosen.push(first);
+    });
+    sorted.forEach((p) => { if (chosen.length < max && !chosen.includes(p)) chosen.push(p); });
+    return chosen.sort(byPriority);
+  }
+
+  /* ---- 1日の目安・ポイント・食品リストを組み立てる ---- */
+  function buildModel(input, c) {
+    const sel = input.selected;
+    let points = [], avoid = [], take = [], targets = [], notices = [];
+
+    sel.forEach((d) => {
+      const dz = DATA.diseases[d];
+      (dz.points || []).forEach((p) => {
+        if (p.use) {
+          const s = DATA.shared[p.use];
+          points.push(Object.assign({}, s, { key: p.use, priority: p.priority, extra: p.extra, shared: true, diseases: [d] }));
+        } else {
+          points.push(Object.assign({}, p, { diseases: [d] }));
+        }
+      });
+      (dz.avoid || []).forEach((f) => avoid.push(Object.assign({}, f, { diseases: [d] })));
+      (dz.take || []).forEach((f) => take.push(Object.assign({}, f, { diseases: [d] })));
+      (dz.targets || []).forEach((t) => targets.push(Object.assign({}, t, { diseases: [d] })));
+      (dz.notices || []).forEach((n) => notices.push(Object.assign({}, n, { diseases: [d] })));
+    });
+
+    // 病名が重なったときの特別ルール
+    let energyConflict = false;
+    DATA.combos.forEach((cb) => {
+      const okAll = !cb.all || cb.all.every((d) => sel.includes(d));
+      const okAny = !cb.any || cb.any.some((d) => sel.includes(d));
+      if (!okAll || !okAny) return;
+      const involved = (cb.all || []).concat((cb.any || []).filter((d) => sel.includes(d)));
+      if (cb.energyConflict) energyConflict = true;
+      const rm = (list, keys) => (keys ? list.filter((x) => !keys.includes(x.key)) : list);
+      points = rm(points, cb.removePoints);
+      avoid = rm(avoid, cb.removeAvoid);
+      take = rm(take, cb.removeTake);
+      (cb.addPoints || []).forEach((p) => points.push(Object.assign({}, p, { diseases: involved })));
+      (cb.addAvoid || []).forEach((f) => avoid.push(Object.assign({}, f, { diseases: involved })));
+      (cb.addTake || []).forEach((f) => take.push(Object.assign({}, f, { diseases: involved })));
+    });
+
+    // 1日の目安：同じ key は厳しいほう（strictness が小さいほう）を採用
+    const tmap = new Map();
+    targets.forEach((t) => {
+      const prev = tmap.get(t.key);
+      if (!prev || (t.strictness || 99) < (prev.strictness || 99)) tmap.set(t.key, t);
+    });
+    let targetList = applyKidney([...tmap.values()], input.kidney);
+
+    // 共通ポイントの {value} を、1日の目安の値に置きかえる
+    const valueOf = (key) => { const t = targetList.find((x) => x.key === key); return t ? t.value : ''; };
+
+    points = applyKidney(mergeByKey(points), input.kidney).map((p) => {
+      const o = Object.assign({}, p);
+      // 性別で文章が変わるポイント（bodyMale / bodyFemale があるとき）
+      const kidneyReplaced = input.kidney && p.kidneyBody;
+      if (input.sex === 'male' && p.bodyMale && !kidneyReplaced) o.body = p.bodyMale;
+      if (input.sex === 'female' && p.bodyFemale && !kidneyReplaced) o.body = p.bodyFemale;
+      // 体重のポイントは BMI で文章が変わる
+      if (p.key === 'weight' && p.shared) {
+        const kind = c.bmiClass ? c.bmiClass.kind : null;
+        if (kind === 'high') {
+          o.title = p.titleHigh; o.body = p.bodyHigh; o.priority = p.priority + 20;
+          const kg = fix1(input.weight * 0.03) + '〜' + fix1(input.weight * 0.05) + 'kg';
+          o.body = o.body.replace('{kg}', kg);
+        } else if (kind === 'normal') {
+          o.title = p.titleNormal; o.body = p.bodyNormal; o.priority = p.priority - 20;
+        } else if (kind === 'low') {
+          o.title = p.titleLow; o.body = p.bodyLow; o.priority = p.priority + 10;
+        }
+      }
+      const v = valueOf(p.key);
+      o.title = (o.title || '').replace('{value}', v);
+      o.body = (o.body || '').replace('{value}', v);
+      if (o.extras && o.extras.length) o.body = o.body + ' ' + o.extras.join(' ');
+      return o;
+    });
+    points = pickPoints(points, sel, DATA.maxPoints);
+
+    avoid = applyKidney(mergeByKey(avoid), input.kidney).sort(byPriority).slice(0, DATA.maxFoods);
+    take = applyKidney(mergeByKey(take), input.kidney).sort(byPriority).slice(0, DATA.maxFoods);
+    notices = applyKidney(mergeByKey(notices), input.kidney);
+
+    const hasConsult = energyConflict || points.some((p) => p.consult) || avoid.some((f) => f.consult) || take.some((f) => f.consult);
+    return { targets: targetList, points, avoid, take, notices, energyConflict, hasConsult };
+  }
+
+  /* ---- 1日の目安の表の行を作る ---- */
+  function targetRows(input, c, model) {
+    const rows = [];
+    const miss = (t) => '<span class="miss">' + esc(t) + '</span>';
+    const row = (label, value, note, opts) => {
+      opts = opts || {};
+      rows.push({
+        order: opts.order || 50,
+        html: '<tr><th scope="row">' + esc(label) + '</th><td><span class="val">' + value + '</span>' +
+          (opts.consult ? consultMark() : '') +
+          (note ? ' <span class="note">' + esc(note) + '</span>' : '') + '</td></tr>',
+      });
+    };
+
+    // BMI
+    if (c.bmi !== null) row('今のBMI', esc(fix1(c.bmi)) + '　' + esc(c.bmiClass.label), null, { order: 1 });
+    else row('今のBMI', miss('身長と体重を入れると表示されます'), null, { order: 1 });
+
+    // 目標体重
+    if (c.tw) {
+      const v = c.tw.isRange ? fix1(c.tw.low) + '〜' + fix1(c.tw.high) + ' kg' : fix1(c.tw.low) + ' kg';
+      const f = c.tw.isRange ? '身長(m)² × ' + c.tw.factors[0] + '〜' + c.tw.factors[1] : '身長(m)² × ' + c.tw.factors[0];
+      row('目標体重', esc(v), f + '（' + (input.age >= DATA.targetWeight.ageCut ? DATA.targetWeight.ageCut + '歳以上' : DATA.targetWeight.ageCut + '歳未満') + '）', { order: 2 });
+    } else {
+      row('目標体重', miss('年齢と身長を入れると表示されます'), null, { order: 2 });
+    }
+
+    // 1日のエネルギー量
+    if (c.energy) {
+      const e = c.energy;
+      const v = e.high ? '約 ' + fmt(e.low) + '〜' + fmt(e.high) + ' kcal' : '約 ' + fmt(e.low) + ' kcal 以上';
+      const twText = c.tw.isRange ? fix1(c.tw.low) + '〜' + fix1(c.tw.high) + 'kg' : fix1(c.tw.low) + 'kg';
+      const coef = e.act.max ? e.act.min + '〜' + e.act.max + ' kcal' : e.act.min + ' kcal以上';
+      const conflictNames = ['dm', 'dl'].filter((d) => input.selected.includes(d)).map((d) => DATA.diseases[d].name).join('・');
+      const label = model.energyConflict ? '1日のエネルギー\n（' + conflictNames + 'の考え方）' : '1日のエネルギー';
+      row(label, esc(v), '目標体重 ' + twText + ' × ' + coef + '（' + e.act.short + '）', { order: 3, consult: model.energyConflict });
+    } else {
+      const need = [];
+      if (!c.tw) need.push('年齢・身長');
+      if (!input.activity) need.push('身体活動量');
+      row('1日のエネルギー', miss((need.join('と') || '上の項目') + 'を入れると表示されます'), null, { order: 3 });
+    }
+
+    // 低アルブミン血症のエネルギー・たんぱく質
+    if (input.selected.includes('hypoalb')) {
+      if (c.hypoalbEnergy) {
+        const h = c.hypoalbEnergy;
+        row(model.energyConflict ? '1日のエネルギー\n（低アルブミン血症の考え方）' : 'しっかり食べる目安',
+          esc('約 ' + fmt(h.low) + '〜' + fmt(h.high) + ' kcal'), '今の体重 ' + fix1(input.weight) + 'kg × ' + h.perKg[0] + '〜' + h.perKg[1] + ' kcal', { order: 4, consult: model.energyConflict });
+      } else {
+        row('しっかり食べる目安', miss('体重を入れると表示されます'), null, { order: 4 });
+      }
+      if (!input.kidney) {
+        if (c.protein) {
+          const p = c.protein;
+          row('たんぱく質', esc('1日 約 ' + p.low + '〜' + p.high + ' g'), '今の体重 ' + fix1(input.weight) + 'kg × ' + p.perKg[0].toFixed(1) + '〜' + p.perKg[1].toFixed(1) + ' g', { order: 5 });
+        } else {
+          row('たんぱく質', miss('体重を入れると表示されます'), null, { order: 5 });
+        }
+      }
+    }
+
+    // 病名ごとの目安（食塩・コレステロール・食物繊維・プリン体・水分・お酒）
+    const order = { salt: 10, cholesterol: 11, fiber: 12, purine: 13, water: 14, alcohol: 20 };
+    model.targets.forEach((t) => row(t.label, esc(t.value), t.note, { order: order[t.key] || 15 }));
+
+    // 鉄（性別と月経で変わる）
+    if (input.selected.includes('ida')) {
+      const ir = DATA.diseases.ida.iron;
+      let v, n;
+      if (input.sex === 'male') { v = ir.male; n = ir.noteMale; }
+      else if (input.sex === 'female' && input.menstruation) { v = ir.femaleMenstruating; n = ir.noteFemaleMenstruating; }
+      else if (input.sex === 'female') { v = ir.femaleNot; n = ir.noteFemaleNot; }
+      else { v = ir.unknown; n = ir.noteUnknown; }
+      row('鉄', esc(v), n + '（日本人の食事摂取基準）', { order: 16 });
+    }
+
+    rows.sort((a, b) => a.order - b.order);
+    return rows.map((r) => r.html.replace(/\n/g, '<br>')).join('');
+  }
+
+  /* ---- シートの HTML を作る ---- */
+  function renderSheet(input, c, model) {
+    const h = [];
+    h.push('<header class="sheet-head"><h2 class="sheet-title">' + esc(DATA.sheetTitle) + '</h2>' +
+      '<div class="sheet-meta"><div>日付：' + esc(todayJa()) + '</div><div class="name">お名前：＿＿＿＿＿＿＿＿＿＿＿＿</div></div></header>');
+
+    if (!input.selected.length) {
+      h.push('<p class="empty">左の入力欄で病名を選ぶと、ここに食事のポイントが表示されます。</p>');
+    } else {
+      const names = input.selected.map((d) => esc(DATA.diseases[d].name)).join('、');
+      h.push('<p class="sheet-dz"><span class="lbl">対象の病名</span>' + names +
+        (input.kidney ? '<span class="kidney-tag">（' + esc(DATA.kidney.tag) + '）</span>' : '') + '</p>');
+    }
+
+    if (input.kidney) h.push('<div class="notice kidney">' + esc(DATA.kidney.notice) + '</div>');
+
+    // 1日の目安
+    h.push('<section class="targets"><h3>からだと1日の目安 <span class="h3-note">※ ' + esc(DATA.estimateNote) + '</span></h3><table>' + targetRows(input, c, model) + '</table></section>');
+
+    // 大事なポイント
+    if (model.points.length) {
+      h.push('<section class="points"><h3>大事なポイント</h3><ol>' + model.points.map((p) =>
+        '<li><div class="pt-title">' + esc(p.title) + (p.consult ? consultMark() : '') + '</div>' +
+        (p.body ? '<div class="pt-body">' + esc(p.body) + '</div>' : '') + '</li>').join('') + '</ol></section>');
+    }
+
+    // 控えたい食品／とりたい食品（左右1行ずつの対にすると、印刷で途中改ページしても崩れにくい）
+    if (model.avoid.length || model.take.length) {
+      const n = Math.max(model.avoid.length, model.take.length);
+      const cell = (f) => (f ? '<td><span class="bul">・</span>' + esc(f.text) + (f.consult ? consultMark() : '') + '</td>' : '<td></td>');
+      let rows = '';
+      for (let i = 0; i < n; i++) rows += '<tr>' + cell(model.avoid[i]) + cell(model.take[i]) + '</tr>';
+      h.push('<section class="foods"><h3>控えたい食品・とりたい食品</h3><table>' +
+        '<thead><tr><th class="avoid" scope="col">控えたい食品</th><th class="take" scope="col">とりたい食品</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table></section>');
+    }
+
+    // 注意（病名ごと）と「相談」の説明
+    const notes = model.notices.map((n) => '<div class="notice">' + esc(n.text) + '</div>');
+    if (model.hasConsult) notes.push('<div class="notice">' + consultMark() + ' ' + esc(DATA.consultLegend) + '</div>');
+    if (notes.length) h.push('<section class="notices">' + notes.join('') + '</section>');
+
+    // スタッフのひとこと
+    h.push('<section class="staff-section"><h3>スタッフからのひとこと</h3>' +
+      (input.comment ? '<div class="staff">' + esc(input.comment) + '</div>' : '<div class="staff blank" aria-label="手書き用の空欄"></div>') + '</section>');
+
+    // 下部
+    const draft = DATA.reviewStatus !== '済' ? '<span class="draft-mark">（下書き・医師・管理栄養士確認：' + esc(DATA.reviewStatus) + '）</span>' : '';
+    h.push('<footer class="sheet-foot"><div>' + esc(DATA.footerMessage) + draft + '</div><div class="clinic">' + esc(DATA.clinicName) + '</div></footer>');
+    return h.join('');
+  }
+
+  /* ---- 入力のかんたんなチェック（数字がおかしいときの注意）---- */
+  function checkInputs(input) {
+    const w = [];
+    if (input.raw.age && input.age === null) w.push('年齢は0〜120で入れてください。');
+    if (input.raw.height && input.height === null) w.push('身長は50〜250cmで入れてください。');
+    if (input.raw.weight && input.weight === null) w.push('体重は10〜300kgで入れてください。');
+    document.getElementById('body-warn').textContent = w.join(' ');
+  }
+
+  /* ---- 月経の欄の表示（鉄欠乏性貧血を選び、男性でないとき）---- */
+  function updateMenstruationField(input) {
+    const fs = document.getElementById('menstruation-field');
+    fs.hidden = !(input.selected.includes('ida') && input.sex !== 'male');
+  }
+
+  /* ---- プレビューを、置き場所の幅に合わせて縮める（印刷には影響しません）---- */
+  function fitPreview() {
+    const panel = sheet.parentElement;
+    const avail = panel.clientWidth - 32;
+    const z = Math.min(1, avail / SHEET_WIDTH_PX);
+    sheet.style.zoom = z < 1 ? String(z) : '';
+  }
+
+  /* ---- 印刷で1枚に収めるための縮小率を計算する（画面の見た目は変えません）---- */
+  function fitPrint() {
+    const kids = sheet.children;
+    if (!kids.length) return;
+    const saved = sheet.style.zoom;
+    sheet.style.zoom = '';   // 画面用の縮小を一時的に外して、実際の高さを測る
+    const top = kids[0].getBoundingClientRect().top;
+    const bottom = kids[kids.length - 1].getBoundingClientRect().bottom;
+    sheet.style.zoom = saved;
+    const contentMm = (bottom - top) * 25.4 / 96;
+    const usable = SETTINGS.pageHeightMm - SETTINGS.pageMarginTopBottomMm;
+    let z = 1;
+    if (contentMm > usable) {
+      const need = usable / contentMm;
+      if (need >= SETTINGS.minPrintZoom) z = Math.floor(need * 100) / 100 - 0.01;
+    }
+    sheet.style.setProperty('--print-zoom', String(z));
+  }
+
+  /* ---- 全部をまとめて描き直す ---- */
+  function update() {
+    const input = readForm();
+    checkInputs(input);
+    updateMenstruationField(input);
+    const c = calc(input);
+    const model = buildModel(input, c);
+    sheet.innerHTML = renderSheet(input, c, model);
+    fitPrint();
+  }
+
+  /* ---- 画面の下のステータス ---- */
+  document.getElementById('last-updated').textContent = dateJa(DATA.lastUpdated);
+  document.getElementById('review-status').textContent = DATA.reviewStatus;
+
+  /* ---- イベント ---- */
+  buildChoices();
+  form.addEventListener('input', update);
+  form.addEventListener('change', update);
+  form.addEventListener('submit', (e) => e.preventDefault());
+  document.getElementById('print-btn').addEventListener('click', () => window.print());
+  document.getElementById('clear-btn').addEventListener('click', () => {
+    form.reset();
+    form.querySelectorAll('input[type="checkbox"], input[type="radio"]').forEach((el) => { el.checked = false; });
+    form.querySelectorAll('input[type="number"], textarea').forEach((el) => { el.value = ''; });
+    update();
+    const first = form.querySelector('input');
+    if (first) first.focus();
+  });
+  window.addEventListener('resize', fitPreview);
+  if (window.ResizeObserver) new ResizeObserver(fitPreview).observe(sheet.parentElement);
+
+  update();
+  fitPreview();
+})();
+</script>
+</body>
+</html>
